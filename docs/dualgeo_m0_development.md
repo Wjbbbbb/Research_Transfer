@@ -4,6 +4,7 @@
 > 实现仓库：`/share/wangjingbin-local/projects/GeoThinker`
 > 设计仓库：`/share/wangjingbin-local/projects/DualGeo`
 > 工作分支：`dualgeo-m0`（基于 `e9b3786`）
+> M0 bootstrap：`01f8e2d`（`feat(dualgeo): bootstrap M0 route separation`）
 
 本文件是 DualGeo 的实现状态、Git 约定和下一会话入口。开发与实验必须先更新本文件，再开始会改变接口、数据 schema 或实验口径的工作。
 
@@ -39,7 +40,7 @@ M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也�
 - [x] 在一条真实图片样本上运行 `load_self_model`，确认 `assert_self_model_has_no_vggt` 成功且前向不访问 VGGT。
 - [ ] 在同一输入上运行 SEEK，确认已有 checkpoint 的 VGGT 融合前向可用（SEEK 需要额外准备 `geometry_encoder_inputs`，不能复用 SELF 的标准 processor 输入）。
 - [ ] 生成至少一对同帧 `SELF/SEEK` JSONL 记录，保存 cost 表与运行 manifest。
-- [ ] 对 M0 专属改动提交 Git commit；提交后记录 hash 到本文件。
+- [x] M0 bootstrap 已提交为 `01f8e2d`；提交内容经 staged diff 审计，未混入既有脏工作区改动。
 
 ## 4. 已知资产与路径
 
