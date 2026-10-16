@@ -116,4 +116,4 @@ $$
 
 ## 开发入口
 
-实现步骤、接口约定、GeoThinker 的具体改动位置和 smoke test 见 [开发蓝图](dualgeo_architecture.md)；当前实现状态、版本记录和接力规则见 [M0 开发日志](dualgeo_m0_development.md)。需求原文保留在 [原始需求](dualgeo_original_demand.md)，用于追溯第二阶段的主动局部几何方向。
+实现步骤、接口约定、GeoThinker 的具体改动位置和 smoke test 见 [开发蓝图](dualgeo_architecture.md)；当前实现状态、版本记录和接力规则见 [M0 开发日志](dualgeo_m0_development.md)。
