@@ -201,6 +201,13 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local model/data assets and reproducible-but-large experiment outputs.
+.hf_cache/
+artifacts/
+data/media/
+logs/
+models/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

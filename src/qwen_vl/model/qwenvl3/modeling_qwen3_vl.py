@@ -1394,6 +1394,17 @@ class Qwen3VLModel(Qwen3VLPreTrainedModel):
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
+        if geometry_encoder_inputs is not None:
+            # Geometry inputs are supplied as one frame tensor per sample.
+            # This metadata is optional on DualGeo's SELF route.
+            num_visual_inputs = sum(frames.shape[0] for frames in geometry_encoder_inputs)
+        elif image_grid_thw is not None:
+            num_visual_inputs = image_grid_thw.shape[0]
+        elif video_grid_thw is not None:
+            num_visual_inputs = video_grid_thw.shape[0]
+        else:
+            num_visual_inputs = 0
+
         geo_embeds, geo_embed_mask = None, None
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
@@ -1406,7 +1417,10 @@ class Qwen3VLModel(Qwen3VLPreTrainedModel):
             image_embeds = torch.cat(image_embeds, dim=0).to(inputs_embeds.device, inputs_embeds.dtype)
 
             image_mask, _ = self.get_placeholder_mask(
-                input_ids, inputs_embeds=inputs_embeds, image_features=image_embeds, num_images=len(geometry_encoder_inputs[0])
+                input_ids,
+                inputs_embeds=inputs_embeds,
+                image_features=image_embeds,
+                num_images=num_visual_inputs,
             )
 
             mask = input_ids == self.config.image_token_id
@@ -1426,7 +1440,10 @@ class Qwen3VLModel(Qwen3VLPreTrainedModel):
             video_embeds, deepstack_video_embeds = self.get_video_features(pixel_values_videos, video_grid_thw)
             video_embeds = torch.cat(video_embeds, dim=0).to(inputs_embeds.device, inputs_embeds.dtype)
             _, video_mask = self.get_placeholder_mask(
-                input_ids, inputs_embeds=inputs_embeds, video_features=video_embeds, num_images=len(geometry_encoder_inputs[0])
+                input_ids,
+                inputs_embeds=inputs_embeds,
+                video_features=video_embeds,
+                num_images=num_visual_inputs,
             )
             inputs_embeds = inputs_embeds.masked_scatter(video_mask, video_embeds)
 
@@ -1483,7 +1500,7 @@ class Qwen3VLModel(Qwen3VLPreTrainedModel):
                     image_grid_thw,
                     video_grid_thw,
                     attention_mask=attention_mask_tensor,
-                    num_images=len(geometry_encoder_inputs[0]),
+                    num_images=num_visual_inputs,
                 )
                 self.rope_deltas = rope_deltas
             # then use the prev pre-calculated rope-deltas to get the correct position ids
