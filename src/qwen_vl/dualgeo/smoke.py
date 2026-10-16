@@ -12,9 +12,8 @@ import json
 from pathlib import Path
 
 import torch
-from PIL import Image
-from transformers import AutoProcessor
 
+from .inputs import prepare_route_inputs
 from .loading import load_seek_model, load_self_model
 from .types import Route
 
@@ -28,7 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report", help="Optional JSON report path for long-running smoke tests.")
     parser.add_argument(
         "--image",
-        help="Optional local image. On SELF, run a no-generation multimodal forward without geometry inputs.",
+        action="append",
+        help="One local frame path; provide this option exactly four times to run a route forward.",
     )
     return parser.parse_args()
 
@@ -57,21 +57,18 @@ def main() -> None:
         "first_parameter_dtype": str(next(model.parameters()).dtype),
     }
     if args.image:
-        if args.route != Route.SELF.value:
-            raise ValueError("--image forward smoke is implemented for SELF only during M0")
-        image = Image.open(args.image).convert("RGB")
-        processor = AutoProcessor.from_pretrained(args.checkpoint)
-        messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe the image."}]}]
-        prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = processor(text=[prompt], images=[image], return_tensors="pt", padding=True)
         device = next(model.parameters()).device
-        inputs = {
-            name: value.to(device) if isinstance(value, torch.Tensor) else value
-            for name, value in inputs.items()
-        }
+        inputs = prepare_route_inputs(
+            args.checkpoint,
+            args.image,
+            "Describe the scene using all four views.",
+            device=device,
+            include_geometry=args.route == Route.SEEK.value,
+        )
         with torch.inference_mode():
             outputs = model(**inputs)
         report["forward_logits_shape"] = list(outputs.logits.shape)
+        report["frame_count"] = len(args.image)
     serialized = json.dumps(report, sort_keys=True)
     if args.report:
         destination = Path(args.report)

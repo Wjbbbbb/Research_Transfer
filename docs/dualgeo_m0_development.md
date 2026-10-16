@@ -4,6 +4,7 @@
 > 唯一仓库：`/share/wangjingbin-local/projects/DualGeo`
 > 工作分支：`dualgeo-m0`（基于 `e9b3786`）
 > M0 bootstrap：`01f8e2d`（`feat(dualgeo): bootstrap M0 route separation`）
+> M0 验收增量：待本轮提交（四帧 SEEK 前向、成对采集器、manifest）
 
 本文件是 DualGeo 的实现状态、Git 约定和下一会话入口。开发与实验必须先更新本文件，再开始会改变接口、数据 schema 或实验口径的工作。
 
@@ -32,13 +33,17 @@ M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也�
 - [x] 在 `geothinker` 环境运行 M0 单元测试（3/3 通过），验证 SELF config 会关闭 geometry encoder/cross-attention。
 - [x] 真实 checkpoint smoke：SELF 在 `cuda:0` 加载后 `geometry_module_count=0`；SEEK 在 `cuda:1` 加载后 `geometry_module_count=1381`。二者均为 BF16。
 - [x] 真实 SELF multimodal forward：使用 MindCube 本地图片、未传 `geometry_encoder_inputs`，得到 logits shape `[1, 446, 151936]`，证明 M0 的空几何输入修复有效。
+- [x] 固定四帧输入协议：`inputs.py` 要求且仅接受 4 个有序全图帧；Qwen 和 VGGT 输入从同一有序路径列表构造。
+- [x] 真实四帧前向：同一 MindCube 四帧在 `cuda:1` 上均得到 logits `[1, 152, 151936]`；SELF 的 `geometry_module_count=0`，SEEK 为 `1381`。
+- [x] 成对 collector：`python -m qwen_vl.dualgeo.collect` 会在独立模型生命周期中依次运行 SELF、SEEK，生成严格 schema JSONL 与不可入训的 JSON manifest。
+- [x] 端到端采集 smoke：`artifacts/dualgeo/m0-smoke-device/`（本地忽略）包含同一四帧的两个记录；SELF/SEEK 均生成 `ok`，teacher-forced loss 分别为 `0.00662/0.00393`，峰值显存为 `16775.59/22941.76 MiB`。此人为短答仅验证采集链路，**不是**空间能力结果。
 
 ## 3. 尚未完成（M0 验收）
 
-- [ ] 用 `geothinker` conda 环境运行单元测试。
+- [x] 用 `geothinker` conda 环境运行单元测试（本轮 6/6 通过）。
 - [x] 在一条真实图片样本上运行 `load_self_model`，确认 `assert_self_model_has_no_vggt` 成功且前向不访问 VGGT。
-- [ ] 在同一输入上运行 SEEK，确认已有 checkpoint 的 VGGT 融合前向可用（SEEK 需要额外准备 `geometry_encoder_inputs`，不能复用 SELF 的标准 processor 输入）。
-- [ ] 生成至少一对同帧 `SELF/SEEK` JSONL 记录，保存 cost 表与运行 manifest。
+- [x] 在同一输入上运行 SEEK，确认已有 checkpoint 的 VGGT 融合前向可用（SEEK 使用额外准备的 `geometry_encoder_inputs`）。
+- [x] 生成至少一对同帧 `SELF/SEEK` JSONL 记录，并保存 cost 表与运行 manifest。
 - [x] M0 bootstrap 已提交为 `01f8e2d`；提交内容经 staged diff 审计，未混入既有脏工作区改动。
 
 ## 4. 已知资产与路径
@@ -100,8 +105,8 @@ git commit -m "feat(dualgeo): bootstrap M0 route separation"
 
 1. 确认当前分支和工作区，再运行 `PYTHONPATH=src conda run -n geothinker python -m unittest discover -s tests/dualgeo -p 'test_*.py'`。
 2. 运行 `python -m qwen_vl.dualgeo.smoke` 对真实 checkpoint 做 load-only smoke test；先加载 SELF，再加载 SEEK，避免同时占满 GPU 显存。
-3. 将固定图片/视频样本和 4 帧规则写成可调用 collector，生成一对 JSONL records 及 manifest。
-4. 只有 M0 验收全部通过且 commit 已记录后，才创建 M1 分支实现 `FastSpatialAdapter`。
+3. 对首个带真实空间标注的评测样本运行 collector；复用同一命令格式，但用该数据集的 question/reference answer 替换本地管线 smoke 短答。该结果属于 M1 前的基线数据，不改变 M0 已验证的接口。
+4. 确认本轮提交后，从该 commit 新建 `dualgeo-m1-fast`，才可实现 `FastSpatialAdapter`。
 
 ## 8.1 已知非阻塞警告
 

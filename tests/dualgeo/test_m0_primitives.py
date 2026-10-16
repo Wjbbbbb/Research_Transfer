@@ -2,6 +2,8 @@ import json
 import unittest
 
 from qwen_vl.dualgeo.cache import append_records, read_records
+from qwen_vl.dualgeo.collect import normalize_answer
+from qwen_vl.dualgeo.inputs import validate_m0_frames
 from qwen_vl.dualgeo.profiling import profile_call
 from qwen_vl.dualgeo.types import CounterfactualRecord, InferenceProfile, Route
 
@@ -45,3 +47,18 @@ class M0PrimitivesTest(unittest.TestCase):
         result, profile = profile_call(lambda left, right: left + right, 2, 3)
         self.assertEqual(result, 5)
         self.assertGreaterEqual(profile.wall_time_ms, 0)
+
+    def test_profile_call_accepts_an_explicit_cuda_device(self):
+        result, profile = profile_call(lambda: "ok", cuda_device="cuda:1")
+        self.assertEqual(result, "ok")
+        self.assertTrue(profile.peak_memory_mb is None or profile.peak_memory_mb >= 0)
+
+    def test_m0_frame_protocol_requires_four_ordered_frames(self):
+        validate_m0_frames(["a", "b", "c", "d"], [0, 8, 16, 24])
+        with self.assertRaisesRegex(ValueError, "exactly 4"):
+            validate_m0_frames(["a"], [0])
+        with self.assertRaisesRegex(ValueError, "ascending"):
+            validate_m0_frames(["a", "b", "c", "d"], [8, 0, 16, 24])
+
+    def test_m0_exact_match_normalizer_is_whitespace_and_case_invariant(self):
+        self.assertEqual(normalize_answer("  LEFT\nSIDE "), "left side")
