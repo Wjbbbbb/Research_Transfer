@@ -4,7 +4,7 @@
 > 唯一仓库：`/share/wangjingbin-local/projects/DualGeo`
 > 工作分支：`dualgeo-m0`（基于 `e9b3786`）
 > M0 bootstrap：`01f8e2d`（`feat(dualgeo): bootstrap M0 route separation`）
-> M0 验收增量：待本轮提交（四帧 SEEK 前向、成对采集器、manifest）
+> M0 验收增量：`dde0d65`（`feat(dualgeo): complete M0 counterfactual collection`）
 
 本文件是 DualGeo 的实现状态、Git 约定和下一会话入口。开发与实验必须先更新本文件，再开始会改变接口、数据 schema 或实验口径的工作。
 
@@ -38,7 +38,7 @@ M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也�
 - [x] 成对 collector：`python -m qwen_vl.dualgeo.collect` 会在独立模型生命周期中依次运行 SELF、SEEK，生成严格 schema JSONL 与不可入训的 JSON manifest。
 - [x] 端到端采集 smoke：`artifacts/dualgeo/m0-smoke-device/`（本地忽略）包含同一四帧的两个记录；SELF/SEEK 均生成 `ok`，teacher-forced loss 分别为 `0.00662/0.00393`，峰值显存为 `16775.59/22941.76 MiB`。此人为短答仅验证采集链路，**不是**空间能力结果。
 
-## 3. 尚未完成（M0 验收）
+## 3. M0 验收清单（已完成）
 
 - [x] 用 `geothinker` conda 环境运行单元测试（本轮 6/6 通过）。
 - [x] 在一条真实图片样本上运行 `load_self_model`，确认 `assert_self_model_has_no_vggt` 成功且前向不访问 VGGT。
