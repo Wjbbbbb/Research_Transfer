@@ -1,8 +1,8 @@
-# DualGeo M0：开发状态与接力手册
+# DualGeo：开发状态与接力手册
 
 > 最后更新：2026-10-16
 > 唯一仓库：`/share/wangjingbin-local/projects/DualGeo`
-> 工作分支：`dualgeo-m0`（基于 `e9b3786`）
+> 当前分支：`dualgeo-m1-fast`（基于 M0 验收 `222bde8`）
 > M0 bootstrap：`01f8e2d`（`feat(dualgeo): bootstrap M0 route separation`）
 > M0 验收增量：`dde0d65`（`feat(dualgeo): complete M0 counterfactual collection`）
 
@@ -10,7 +10,9 @@
 
 ## 1. 当前目标与边界
 
-M0 只证明两条路径可以被真实拆开并能留下可复现的反事实记录：
+本文跨阶段记录 DualGeo 的实现状态、实验口径和 Git 接力规则。M0 已结束；M1 只构建并验证快系统能力与 curriculum 对照，不训练 gate、不改变慢路径融合。
+
+M0 的目标是证明两条路径可以被真实拆开并能留下可复现的反事实记录：
 
 - **SELF**：Qwen3-VL 主干不包含、加载或调用 `geometry_encoder` / VGGT。
 - **SEEK**：复用已有 GeoThinker checkpoint、冻结 VGGT、现有 merger 和 cross-attention。
@@ -18,7 +20,29 @@ M0 只证明两条路径可以被真实拆开并能留下可复现的反事实�
 
 M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也不声称任何新的任务性能。设计细节见 [研究设计](dualgeo_design.md) 与 [开发蓝图](dualgeo_architecture.md)。
 
-## 2. 已完成
+## 1.1 M1 当前目标：快系统与训练顺序对照
+
+M1 的快系统仍是同一 Qwen3-VL 的 `SELF` 路径：它不加载 VGGT；`FastSpatialAdapter` 只读取 SELF Qwen token，输出空间摘要、辅助 predicate logits 和未校准风险 logits。答案仍由 SELF Qwen 生成，不能把 adapter 单独称作第二个 VLM。
+
+要比较的两条路线必须从**相同的原始** `/share/wangjingbin-local/models/Qwen3-VL-8B-Instruct` 初始化，并固定训练样本、token 预算、可训练参数、随机种子和最终联合巩固预算：
+
+```text
+A: SELF-only → SEEK-only → SELF/SEEK 联合巩固
+B: SEEK-only → SELF-only → SELF/SEEK 联合巩固
+```
+
+联合巩固是强制阶段；否则第二阶段主要测到的是对第一阶段的遗忘，无法比较可部署的双系统。已有 GeoThinker checkpoint 只能作为 always-SEEK 参考，不能作为 A/B 的共同起点。
+
+M1 已完成：
+
+- [x] 从 `222bde8` 建立分支 `dualgeo-m1-fast`。
+- [x] 新增纯 SELF token 模块：`FastSpatialAdapter`、风险与可选 predicate head；模块中不含 geometry/VGGT state。
+- [x] 新增 ECE、Brier、risk-coverage 指标与两条训练顺序的不可变契约。
+- [x] 在 `geothinker` 环境中运行 M0+M1 单元测试（10/10 通过）。
+
+M1 尚未开始真实训练，原因是严格的 curriculum 还需要能在阶段之间保留或导出同一 Qwen 权重的训练入口。`models/train/mindcube_10k.json` 是本机第一候选训练资产；其分组切分已写入本地忽略目录 `artifacts/dualgeo/m1/mindcube-split-seed0/`：seed `0`、源文件 SHA256 `600d857ff1ab…`，train/calibration/test 分别为 `7875/1107/1018` 个问答、`575/72/79` 个帧目录组。不能直接随机混合其问答到各 split，避免同场景泄漏。
+
+## 2. M0 已完成
 
 - [x] 建立 Git 分支 `dualgeo-m0`。
 - [x] 移除 GeoThinker 中新增的 3DThinker 实现：`three_d_thinker.py`、trainer、训练脚本和复现说明；同步移除了参数、collator latent 插入、Qwen3 latent branch 与 trainer dispatch。
@@ -105,8 +129,9 @@ git commit -m "feat(dualgeo): bootstrap M0 route separation"
 
 1. 确认当前分支和工作区，再运行 `PYTHONPATH=src conda run -n geothinker python -m unittest discover -s tests/dualgeo -p 'test_*.py'`。
 2. 运行 `python -m qwen_vl.dualgeo.smoke` 对真实 checkpoint 做 load-only smoke test；先加载 SELF，再加载 SEEK，避免同时占满 GPU 显存。
-3. 对首个带真实空间标注的评测样本运行 collector；复用同一命令格式，但用该数据集的 question/reference answer 替换本地管线 smoke 短答。该结果属于 M1 前的基线数据，不改变 M0 已验证的接口。
-4. 确认本轮提交后，从该 commit 新建 `dualgeo-m1-fast`，才可实现 `FastSpatialAdapter`。
+3. 为 `models/train/mindcube_10k.json` 建立按原始场景/视频分组的 train/calibration/test manifest；记录算法、seed、source hash 和样本/场景计数，产物写入 `artifacts/dualgeo/`。
+4. 为 A/B 两条路线建立同 token 预算、同可训练参数的阶段配置。必须从原始 Qwen3-VL 权重开始，而不是从 GeoThinker checkpoint 开始。
+5. 在开跑长训练前，以一小批 MindCube 样本验证 SELF-only 和 SEEK-only 阶段的 checkpoint 转换、冻结策略、loss 与恢复路径；随后才提交正式训练任务。
 
 ## 8.1 已知非阻塞警告
 
