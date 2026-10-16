@@ -40,7 +40,13 @@ M1 已完成：
 - [x] 新增 ECE、Brier、risk-coverage 指标与两条训练顺序的不可变契约。
 - [x] 在 `geothinker` 环境中运行 M0+M1 单元测试（10/10 通过）。
 
-M1 尚未开始真实训练，原因是严格的 curriculum 还需要能在阶段之间保留或导出同一 Qwen 权重的训练入口。`models/train/mindcube_10k.json` 是本机第一候选训练资产；其分组切分已写入本地忽略目录 `artifacts/dualgeo/m1/mindcube-split-seed0/`：seed `0`、源文件 SHA256 `600d857ff1ab…`，train/calibration/test 分别为 `7875/1107/1018` 个问答、`575/72/79` 个帧目录组。不能直接随机混合其问答到各 split，避免同场景泄漏。
+`models/train/mindcube_10k.json` 是本机第一候选训练资产；其分组切分已写入本地忽略目录 `artifacts/dualgeo/m1/mindcube-split-seed0/`：seed `0`、源文件 SHA256 `600d857ff1ab…`，train/calibration/test 分别为 `7875/1107/1018` 个问答、`575/72/79` 个帧目录组。不能直接随机混合其问答到各 split，避免同场景泄漏。
+
+M1 的可执行 curriculum 入口已建立，但正式训练尚未启动：必须先完成本轮纯 Qwen VSI-Bench 基线。入口为 `scripts/dualgeo/train_m1_curriculum.sh`，它从原始 `/share/wangjingbin-local/models/Qwen3-VL-8B-Instruct` 开始，接受 `self_then_seek` 或 `seek_then_self`，顺序运行两个单路阶段和一个联合巩固阶段。每一阶段固定同一 split、seed、全局 batch/token 步数和 Qwen 可训练参数。输出必须在 `artifacts/dualgeo/m1/`，不能进入 Git。
+
+为使比较公平，SEEK 的 `/share/wangjingbin-local/models/VGGT-1B`、geometry merger 与各层 cross-attention 均是**冻结 sidecar**；后两者由现有 `models/GeoThinker-VGGT-Scaled-Qwen3VL-8B` 只读加载。它们不是 A/B 的 Qwen 初始权重：两条路线的可训练 Qwen 均从原始 Qwen3-VL 开始。`balanced_hash` 联合阶段以 `sample_id + seed` 的稳定哈希为每个 batch-size-1 样本选择 SELF 或 SEEK，因而可恢复、不会读取答案或慢路径输出，也不训练任何 gate。
+
+运行前必须完成以下 preflight：在空闲的两张 GPU 上以 `NPROC_PER_NODE=2`、`TOTAL_BATCH_SIZE=8` 跑每个顺序的 `max_steps=2`；验证 SELF→SEEK 和 SEEK→SELF checkpoint 转换、冻结清单、loss、最终 save、以及 joint 阶段确实同时出现无 `geometry_encoder_inputs` 与有该字段的 batch。通过后才可将同一脚本的第三个参数改为正式固定步数；不得把 preflight checkpoint 用作正式初始化。
 
 ## 2. M0 已完成
 
@@ -131,7 +137,8 @@ git commit -m "feat(dualgeo): bootstrap M0 route separation"
 2. 运行 `python -m qwen_vl.dualgeo.smoke` 对真实 checkpoint 做 load-only smoke test；先加载 SELF，再加载 SEEK，避免同时占满 GPU 显存。
 3. 为 `models/train/mindcube_10k.json` 建立按原始场景/视频分组的 train/calibration/test manifest；记录算法、seed、source hash 和样本/场景计数，产物写入 `artifacts/dualgeo/`。
 4. 为 A/B 两条路线建立同 token 预算、同可训练参数的阶段配置。必须从原始 Qwen3-VL 权重开始，而不是从 GeoThinker checkpoint 开始。
-5. 在开跑长训练前，以一小批 MindCube 样本验证 SELF-only 和 SEEK-only 阶段的 checkpoint 转换、冻结策略、loss 与恢复路径；随后才提交正式训练任务。
+5. 运行纯 Qwen VSI-Bench 基线：使用 `geothinker` lmms-eval adapter、原始 Qwen 权重、32 帧、greedy、seed 0；完整 5,130 请求正在写入 `artifacts/dualgeo/m1/vsibench-qwen3-baseline-full/`。它不加载 VGGT。
+6. 在开跑长训练前，以一小批 MindCube 样本验证 SELF-only、SEEK-only 与 joint 阶段的 checkpoint 转换、冻结策略、loss 与恢复路径；随后才提交正式训练任务。
 
 ## 8.1 已知非阻塞警告
 

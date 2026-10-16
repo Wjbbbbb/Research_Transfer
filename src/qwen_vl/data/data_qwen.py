@@ -492,6 +492,17 @@ class LazySupervisedDataset(Dataset):
         return images
 
     def _get_item(self, i) -> Dict[str, torch.Tensor]:
+        dualgeo_schedule = getattr(self.data_args, "dualgeo_route_schedule", "none")
+        dualgeo_route = None
+        if dualgeo_schedule != "none":
+            from qwen_vl.dualgeo.training import route_for_sample
+
+            sample_id = str(self.list_data_dict[i].get("id", i))
+            dualgeo_route = route_for_sample(
+                sample_id,
+                dualgeo_schedule,
+                getattr(self.data_args, "dualgeo_route_seed", 0),
+            )
         sources = self.list_data_dict[i]
         if isinstance(i, int):
             sources = [sources]
@@ -667,7 +678,10 @@ class LazySupervisedDataset(Dataset):
         if "image" in self.list_data_dict[i]:
             data_dict["pixel_values"] = image
             data_dict["image_grid_thw"] = grid_thw
-            if getattr(self.data_args, "use_geometry_encoder", False):
+            if (
+                getattr(self.data_args, "use_geometry_encoder", False)
+                and (dualgeo_route is None or dualgeo_route.value == "seek")
+            ):
                 data_dict["geometry_encoder_inputs"] = geometry_encoder_inputs
         # video exist in the data
         elif "video" in self.list_data_dict[i]:

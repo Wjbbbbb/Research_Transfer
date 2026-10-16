@@ -32,6 +32,7 @@ sys.path.insert(0, str(project_root))
 
 import qwen_vl.train.trainer
 import qwen_vl.train.sampler
+from qwen_vl.dualgeo.training import freeze_seek_sidecar, load_frozen_seek_sidecar
 from trainer import replace_qwen2_vl_attention_class
 
 from transformers import (
@@ -100,6 +101,12 @@ def set_model(model_args, model):
         # vggt is frozen
         for n, p in model.geometry_encoder.named_parameters():
             p.requires_grad = False
+        if model_args.freeze_geometry_sidecar:
+            frozen = freeze_seek_sidecar(model)
+            rank0_print(f"DualGeo M1: froze {frozen} SEEK-sidecar tensors")
+    if model_args.freeze_qwen_vision:
+        for _, parameter in model.visual.named_parameters():
+            parameter.requires_grad = False
 
 def train(attn_implementation="flash_attention_2"):
     global local_rank
@@ -108,6 +115,7 @@ def train(attn_implementation="flash_attention_2"):
         (ModelArguments, DataArguments, TrainingArguments)
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    checkpoint_model_type = AutoConfig.from_pretrained(model_args.model_name_or_path).model_type
 
     set_seed(training_args.seed)
     # enable_full_determinism(training_args.seed)
@@ -115,7 +123,7 @@ def train(attn_implementation="flash_attention_2"):
     local_rank = training_args.local_rank
     os.makedirs(training_args.output_dir, exist_ok=True)
 
-    if "qwen2.5" in model_args.model_name_or_path.lower() or "OUTPUT" in model_args.model_name_or_path:
+    if checkpoint_model_type == "qwen2_5_vl":
         if not model_args.use_geometry_encoder:
             from transformers import Qwen2_5_VLForConditionalGeneration
             model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
@@ -172,7 +180,7 @@ def train(attn_implementation="flash_attention_2"):
             data_args.smi_downsample_rate = getattr(config, 'smi_downsample_rate', 2)
 
         data_args.model_type = "qwen2.5vl"
-    elif "qwen3" in model_args.model_name_or_path.lower():
+    elif checkpoint_model_type == "qwen3_vl":
         if not model_args.use_geometry_encoder:
             from transformers import Qwen3VLForConditionalGeneration
             model = Qwen3VLForConditionalGeneration.from_pretrained(
@@ -221,7 +229,11 @@ def train(attn_implementation="flash_attention_2"):
                 torch_dtype=torch.bfloat16,
                 geometry_encoder_path=model_args.geometry_encoder_path
             )
+            if model_args.geometry_sidecar_checkpoint:
+                loaded = load_frozen_seek_sidecar(model, model_args.geometry_sidecar_checkpoint)
+                rank0_print(f"DualGeo M1: loaded frozen SEEK sidecar {loaded}")
 
+        config = model.config
         data_args.image_processor = AutoProcessor.from_pretrained(
             model_args.model_name_or_path,
         ).image_processor

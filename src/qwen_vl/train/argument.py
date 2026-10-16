@@ -28,6 +28,12 @@ class ModelArguments:
     smi_image_num: int = field(default=8)
     smi_downsample_rate: int = field(default=2)
 
+    # DualGeo M1 only: keep the pretrained SEEK sidecar fixed while the
+    # common Qwen backbone follows either curriculum order.
+    geometry_sidecar_checkpoint: Optional[str] = field(default=None)
+    freeze_geometry_sidecar: bool = field(default=False)
+    freeze_qwen_vision: bool = field(default=False)
+
 @dataclass
 class DataArguments:
     dataset_use: str = field(default="")
@@ -41,6 +47,8 @@ class DataArguments:
     video_min_frame_pixels: int = field(default=4 * 28 * 28)
     max_samples: int = field(default=-1)
     shuffle: bool = field(default=True)
+    dualgeo_route_schedule: str = field(default="none")
+    dualgeo_route_seed: int = field(default=0)
 
 
 @dataclass
