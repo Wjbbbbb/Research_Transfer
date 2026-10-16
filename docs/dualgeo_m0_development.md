@@ -68,8 +68,9 @@ M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也�
 git status --short
 git diff --check
 PYTHONPATH=src conda run -n geothinker python -m unittest discover -s tests/dualgeo -p 'test_*.py'
-git add docs/dualgeo_m0_development.md src/qwen_vl/dualgeo tests/dualgeo \
-  src/qwen_vl/model/qwenvl3/modeling_qwen3_vl.py
+git add docs/dualgeo_m0_development.md src/qwen_vl/dualgeo tests/dualgeo
+# 若 shared model 文件已有他人未提交改动，使用交互式分块暂存，绝不直接 git add 整个文件。
+git add -p src/qwen_vl/model/qwenvl3/modeling_qwen3_vl.py
 git diff --cached --stat
 git commit -m "feat(dualgeo): bootstrap M0 route separation"
 ```
@@ -103,6 +104,11 @@ git commit -m "feat(dualgeo): bootstrap M0 route separation"
 3. 将固定图片/视频样本和 4 帧规则写成可调用 collector，生成一对 JSONL records 及 manifest。
 4. 只有 M0 验收全部通过且 commit 已记录后，才创建 M1 分支实现 `FastSpatialAdapter`。
 
-## 8. 交接检查清单
+## 8.1 已知非阻塞警告
+
+- SELF load 会报告 checkpoint 中的 VGGT 和 cross-attention 权重未被使用。这符合 SELF 配置主动关闭 geometry encoder/cross-attention 的预期；`geometry_module_count=0` 是应检查的正向证据。
+- SEEK load 会报告一部分未使用的 merger/cross-attention 权重。现有 GeoThinker eval 已使用该 checkpoint；M0 先记录该事实，后续 SEEK 真正前向时应确认这些权重差异是否来自注入层配置而非 checkpoint 错配。
+
+## 9. 交接检查清单
 
 交接时在消息中提供：当前 Git branch/commit、`git status --short`、本文件第 3 节勾选状态、最后一条测试命令和输出、最近 manifest 路径、任何 blocked 的外部依赖。不要只报“代码已完成”。
