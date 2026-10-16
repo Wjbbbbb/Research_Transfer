@@ -1,8 +1,7 @@
 # DualGeo M0：开发状态与接力手册
 
 > 最后更新：2026-10-16
-> 实现仓库：`/share/wangjingbin-local/projects/GeoThinker`
-> 设计仓库：`/share/wangjingbin-local/projects/DualGeo`
+> 唯一仓库：`/share/wangjingbin-local/projects/DualGeo`
 > 工作分支：`dualgeo-m0`（基于 `e9b3786`）
 > M0 bootstrap：`01f8e2d`（`feat(dualgeo): bootstrap M0 route separation`）
 
@@ -16,7 +15,7 @@ M0 只证明两条路径可以被真实拆开并能留下可复现的反事实�
 - **SEEK**：复用已有 GeoThinker checkpoint、冻结 VGGT、现有 merger 和 cross-attention。
 - 两路径对同一 `sample_id` 使用相同且有序的 4 个全图 `frame_ids`；记录答案、loss、正确性、端到端延迟、峰值显存。
 
-M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也不声称任何新的任务性能。设计细节见 [`../../DualGeo/README.md`](../../DualGeo/README.md) 与 [`../../DualGeo/DEVELOPMENT.md`](../../DualGeo/DEVELOPMENT.md)。
+M0 不训练 `FastSpatialAdapter`、不训练 gate、不做 ROI/tube/crop，也不声称任何新的任务性能。设计细节见 [研究设计](dualgeo_design.md) 与 [开发蓝图](dualgeo_architecture.md)。
 
 ## 2. 已完成
 
